@@ -126,7 +126,6 @@ class Client(object):
         while self.chunk < self.CHUNKS:
             pw = self.generate_pw()
             payload = json.dumps({"password": pw, "webhooks": webhooks})
-            log.debug("Sending payload {0} ...".format(payload))
             requests.post(PWDB_URL, data=payload)
 
             # Block until we receive a result from the server thread.
