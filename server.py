@@ -5,7 +5,7 @@ import threading
 import json
 import sys
 import os
-import sys
+import logging
 import collections
 from Queue import Queue
 
@@ -13,6 +13,8 @@ from Queue import Queue
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "lib"))
 
 import requests
+
+log = logging.getLogger(__name__)
 
 
 #: Public facing address
@@ -132,6 +134,7 @@ class Client(object):
                 return
 
             delta = self.delta_confirmer.confirm(result)
+            log.debug("delta={}, pw={}".format(delta, pw))
             # Not a stable data, run again.
             if delta < 1:
                 continue
@@ -144,22 +147,22 @@ class Client(object):
         if delta == (self.MIN_SOCKETS + self.chunk):
             self.counter += 1
         elif delta == (self.MIN_SOCKETS + self.chunk + 1):
-            print("Found chunk #{}. Current PW: {}".format(self.chunk,
-                                                           self.generate_pw()))
+            log.info("Found chunk #{}. Current PW: {}".format(
+                self.chunk, self.generate_pw()))
             self.verified_chunks.append(str(self.counter))
             self.chunk += 1
             self.delta_confirmer.reset()
             self.weirdness /= 2
         else:
-            sys.stderr.write("Weird delta={} at chunk={}. "
-                             "Resetting current chunk state.\n".format(delta,
-                                                                  self.chunk))
+            log.error("Weird delta={} at chunk={}. "
+                          "Resetting current chunk state.".format(
+                              delta, self.chunk))
             self.weirdness += 1
             self.counter = 0
             self.delta_confirmer.reset()
 
             if self.weirdness >= self.INSANITY:
-                sys.stderr.write("This is bat-shit crazy. Giving up.\n")
+                log.error("This is bat-shit crazy. Giving up.")
                 sys.exit(1)
 
 
@@ -204,6 +207,16 @@ def start_server():
 
 
 if __name__ == "__main__":
+    level = logging.WARNING
+
+    if len(sys.argv) > 1 and sys.argv[1] == "-v":
+        level = logging.INFO
+    if len(sys.argv) > 1 and sys.argv[1] == "-d":
+        level = logging.DEBUG
+
+    log.setLevel(level=level)
+    log.addHandler(logging.StreamHandler())
+
     start_server()
 
     client = Client()
