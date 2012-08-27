@@ -97,7 +97,6 @@ class Client(object):
         self.chunk = 0
         self.counter = 0
         self.verified_chunks = []
-        self.last_source_port = 0
         self.weirdness = 0
 
         self.delta_confirmer = DeltaConfirmer(self.CONFIRMATIONS,
@@ -138,7 +137,8 @@ class Client(object):
                 return
 
             delta, confident = self.delta_confirmer.confirm(result)
-            log.debug("delta={0}, pw={1}".format(delta, pw))
+            log.debug("delta={0}, confident={1}, pw={2}".format(
+                delta, confident, pw))
             # Not a stable data, run again.
             if delta < 1:
                 continue
@@ -159,6 +159,7 @@ class Client(object):
                 self.chunk, self.generate_pw()))
             self.verified_chunks.append(str(self.counter))
             self.chunk += 1
+            self.counter = 0
             self.delta_confirmer.reset()
             self.weirdness /= 2
         else:
@@ -212,11 +213,11 @@ class DeltaConfirmer(object):
 
         self.ringbuffer.append(delta)
 
-        if len(self.ringbuffer) == self.confirmations:
-            value = self.ringbuffer.popleft()
+        if len(self.ringbuffer) == (self.confirmations + self.extra):
+            value = self.ringbuffer[-1]
             sames = len(filter(lambda x: x == value, self.ringbuffer))
 
-            if sames > self.confirmations:
+            if sames >= self.confirmations:
                 return value, (sames == self.confirmations + self.extra)
 
         return (-1, False)
