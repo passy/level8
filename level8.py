@@ -18,10 +18,10 @@ log = logging.getLogger(__name__)
 
 
 #: Public facing address
-SERVER_HOST = "level02-3.stripe-ctf.com"
+SERVER_HOST = "127.0.0.1"
 SERVER_PORT = 50112
 #: URL to the PasswordDB server API endpoint.
-PWDB_URL = "https://level08-1.stripe-ctf.com/user-wviepjncvg/"
+PWDB_URL = "http://127.0.0.1:3000/"
 
 
 # Synchronized queue for inter-thread communication
