@@ -9,7 +9,7 @@ import logging
 import collections
 from Queue import Queue
 
-# Inser lib/ path into library path
+# Insert lib/ into library path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "lib"))
 
 import requests
