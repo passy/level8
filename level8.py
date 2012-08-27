@@ -124,6 +124,7 @@ class Client(object):
         while self.chunk < self.CHUNKS:
             pw = self.generate_pw()
             payload = json.dumps({"password": pw, "webhooks": webhooks})
+            log.debug("Sending payload {0} ...".format(payload))
             requests.post(PWDB_URL, data=payload)
 
             # Block until we receive a result from the server thread.
@@ -198,12 +199,14 @@ class DeltaConfirmer(object):
 
 
 def start_server():
+    log.debug("Starting server thread.")
     server = WebhookServer(("0.0.0.0", SERVER_PORT))
     server_thread = threading.Thread(target=server.serve_forever)
 
     # Exit when main thread exists
     server_thread.daemon = True
     server_thread.start()
+    log.debug("Server thread started.")
 
 
 if __name__ == "__main__":
