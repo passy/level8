@@ -119,7 +119,7 @@ class Client(object):
         return "".join(chunks)
 
     def run(self):
-        webhooks = ["{0}:{0}".format(SERVER_HOST, SERVER_PORT)]
+        webhooks = ["{0}:{1}".format(SERVER_HOST, SERVER_PORT)]
 
         while self.chunk < self.CHUNKS:
             pw = self.generate_pw()
