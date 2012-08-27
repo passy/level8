@@ -184,6 +184,10 @@ class DeltaConfirmer(object):
         delta = result.source_port - self.last_source_port
         self.last_source_port = result.source_port
 
+        log.debug("source_port={0}, last_source_port={1}, "
+                  "real_delta={2}".format(
+                      result.source_port, self.last_source_port, delta))
+
         # Either first connect or counter reset
         if delta < 1:
             return delta
